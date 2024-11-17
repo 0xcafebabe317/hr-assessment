@@ -1,0 +1,13 @@
+<!DOCTYPE html>
+<html lang="zh" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8"/>
+    <title>Title</title>
+</head>
+<body>
+<h1>【E-remind】修改邮箱提醒</h1></br>
+<h3>请点击下面的链接完成验证:
+<a href="#" th:href="@{http://localhost:8101/api/user/mail/check/{id}/{mail} (id=${id},mail=${mail})}">确认修改</a>
+</h3>
+</body>
+</html>

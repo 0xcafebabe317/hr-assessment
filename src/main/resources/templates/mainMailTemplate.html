@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="zh" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8"/>
+    <title>Title</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            line-height: 1.4;
+        }
+
+        .container {
+            margin: 20px auto;
+            max-width: 600px;
+            padding: 20px;
+            border: 1px solid #ccc;
+            background-color: #f9f9f9;
+        }
+
+        h1 {
+            font-size: 24px;
+            margin-top: 0;
+        }
+
+        ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        li {
+            margin-bottom: 10px; /* 调整行间距 */
+        }
+
+        .footer {
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid #ccc;
+            text-align: center;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>【林芝电信仓储系统-出库提醒】</h1>
+    <ul>
+        <!-- 使用 th:each 遍历 List -->
+        <li th:each="item, index : ${content}">
+            <!-- 在迭代中访问 List 的元素 -->
+            <span th:text="${item}"></span>
+        </li>
+    </ul>
+    <div class="footer">
+        取消订阅邮件请联系:13308941203
+    </div>
+</div>
+</body>
+</html>
