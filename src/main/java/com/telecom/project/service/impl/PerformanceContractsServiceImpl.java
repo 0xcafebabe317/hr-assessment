@@ -1,5 +1,6 @@
 package com.telecom.project.service.impl;
 
+import com.baomidou.mybatisplus.core.conditions.query.Query;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
@@ -10,18 +11,33 @@ import com.telecom.project.exception.BusinessException;
 import com.telecom.project.model.dto.contracts.*;
 import com.telecom.project.model.entity.*;
 import com.telecom.project.model.vo.ContractsVO;
+import com.telecom.project.model.vo.ExcelVO;
 import com.telecom.project.service.*;
 import com.telecom.project.mapper.PerformanceContractsMapper;
 import org.apache.commons.lang3.StringUtils;
+import org.apache.poi.ss.usermodel.Cell;
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
+import org.springframework.util.CollectionUtils;
+import org.springframework.web.multipart.MultipartFile;
 
 import javax.annotation.Resource;
 import javax.servlet.http.HttpServletRequest;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.*;
 import java.util.stream.Collectors;
 
 import static com.telecom.project.utils.DateUtil.getCurrentDateAsDate;
+import static com.telecom.project.utils.ExcelUtil.convertToExcelVO;
 
 /**
  * @author tiscy
@@ -31,6 +47,12 @@ import static com.telecom.project.utils.DateUtil.getCurrentDateAsDate;
 @Service
 public class PerformanceContractsServiceImpl extends ServiceImpl<PerformanceContractsMapper, PerformanceContracts>
         implements PerformanceContractsService {
+
+    @Resource
+    private ConfirmService confirmService;
+
+    @Resource
+    private PublicityService publicityService;
 
     @Resource
     private UserService userService;
@@ -321,6 +343,331 @@ public class PerformanceContractsServiceImpl extends ServiceImpl<PerformanceCont
         return res;
     }
 
+    @Override
+    public Page<PerformanceContracts> getPublicResult(PageRequest pageRequest, HttpServletRequest request) {
+        String date = getCurrentDateAsDate();
+        // 查询是否公示
+        QueryWrapper<Publicity> wrapper = new QueryWrapper<>();
+        wrapper.eq("assessment_time", date);
+        Publicity one = publicityService.getOne(wrapper);
+        if (one.getIsPublic() != 1L) {
+            return null;
+        }
+
+        long current = pageRequest.getCurrent();
+        long pageSize = pageRequest.getPageSize();
+
+        User loginUser = userService.getLoginUser(request);
+        String userDept = loginUser.getUserDept();
+        String userName = loginUser.getUserName();
+
+
+        // 本部门要打分的细则
+        QueryWrapper<PerformanceContracts> wrapper1 = new QueryWrapper<>();
+        wrapper1.eq("assessed_unit", userDept);
+        wrapper1.eq("assessed_people", userName);
+        List<PerformanceContracts> list = this.list(wrapper1);
+
+        // 本部门要打分的id集合
+        List<Long> ids = list.stream().map(PerformanceContracts::getId).collect(Collectors.toList());
+
+        QueryWrapper<ContractsScore> scoreQueryWrapper = new QueryWrapper<>();
+        // 在打分表中去中id相同并且未锁定的打分合同
+        scoreQueryWrapper.in("contract_id", ids) // contract_id 在 ids 列表中
+                .eq("is_lock", 1);
+
+        // 得到打分合同
+        List<ContractsScore> contractsScores = contractsScoreService.list(scoreQueryWrapper);
+
+        // 打分合同中的合同id集合，这就是全部要返回的id集合
+        List<Long> contractsScoresIds = contractsScores.stream().map(ContractsScore::getContract_id).collect(Collectors.toList());
+
+        // 最终业绩合同
+        if (!contractsScoresIds.isEmpty()) {
+            List<PerformanceContracts> performanceContractsList = this.listByIds(contractsScoresIds);
+
+            // 按 categories 和 sub_categories 排序
+            performanceContractsList.sort(Comparator.comparing(PerformanceContracts::getCategories)
+                    .thenComparing(PerformanceContracts::getSub_categories));
+
+            // 处理分页
+            Page<PerformanceContracts> page = new Page<>(current, pageSize, performanceContractsList.size());
+
+            // 计算分页的开始和结束索引
+            int startIndex = (int) ((current - 1) * pageSize);
+            int endIndex = Math.min(startIndex + (int) pageSize, performanceContractsList.size());
+
+            // 设置当前页记录
+            page.setRecords(performanceContractsList.subList(startIndex, endIndex));
+
+            return page;
+        }
+
+        return null;
+    }
+
+    @Override
+    public boolean confirm(HttpServletRequest request) {
+        User loginUser = userService.getLoginUser(request);
+        String userDept = loginUser.getUserDept();
+        String userName = loginUser.getUserName();
+        String date = getCurrentDateAsDate();
+        QueryWrapper<Confirm> wrapper = new QueryWrapper<>();
+        wrapper.eq("assessment_time", date);
+        wrapper.eq("unit", userDept);
+        wrapper.eq("name", userName);
+        Confirm one = confirmService.getOne(wrapper);
+        if (one == null) {
+            throw new BusinessException(ErrorCode.OPERATION_ERROR, "没有该评分记录!");
+        }
+        one.setIsConfirm(1);
+        return confirmService.updateById(one);
+    }
+
+    @Override
+    public boolean isConfirm(HttpServletRequest request) {
+        User loginUser = userService.getLoginUser(request);
+        String userDept = loginUser.getUserDept();
+        String userName = loginUser.getUserName();
+        String date = getCurrentDateAsDate();
+        QueryWrapper<Confirm> wrapper = new QueryWrapper<>();
+        wrapper.eq("assessment_time", date);
+        wrapper.eq("unit", userDept);
+        wrapper.eq("name", userName);
+        Confirm one = confirmService.getOne(wrapper);
+        if (one.getIsConfirm() == 1) {
+            return true;
+        }
+        return false;
+    }
+
+    @Override
+    public boolean dispute(HttpServletRequest request) {
+        User loginUser = userService.getLoginUser(request);
+        String userDept = loginUser.getUserDept();
+        String userName = loginUser.getUserName();
+        String date = getCurrentDateAsDate();
+        QueryWrapper<Confirm> wrapper = new QueryWrapper<>();
+        wrapper.eq("assessment_time", date);
+        wrapper.eq("unit", userDept);
+        wrapper.eq("name", userName);
+        Confirm one = confirmService.getOne(wrapper);
+        if (one == null) {
+            throw new BusinessException(ErrorCode.OPERATION_ERROR, "没有该评分记录!");
+        }
+        one.setIsDispute(1);
+        return confirmService.updateById(one);
+    }
+
+    @Override
+    public boolean isDispute(HttpServletRequest request) {
+        User loginUser = userService.getLoginUser(request);
+        String userDept = loginUser.getUserDept();
+        String userName = loginUser.getUserName();
+        String date = getCurrentDateAsDate();
+        QueryWrapper<Confirm> wrapper = new QueryWrapper<>();
+        wrapper.eq("assessment_time", date);
+        wrapper.eq("unit", userDept);
+        wrapper.eq("name", userName);
+        Confirm one = confirmService.getOne(wrapper);
+        if (one.getIsDispute() == 1) {
+            return true;
+        }
+        return false;
+    }
+
+    @Override
+    public List<ExcelVO> getAllContracts(HttpServletRequest request) {
+
+        User loginUser = userService.getLoginUser(request);
+        String userDept = loginUser.getUserDept();
+        // 本月时间
+        String date = getCurrentDateAsDate();
+
+        // 查询当月的合同评分记录
+        QueryWrapper<ContractsScore> wrapper = new QueryWrapper<>();
+        wrapper.eq("assessment_time", date);
+        List<ContractsScore> list = contractsScoreService.list(wrapper);
+
+        if (CollectionUtils.isEmpty(list)) {
+            throw new BusinessException(ErrorCode.OPERATION_ERROR, "当月没有可导出的业绩合同");
+        }
+
+        // 已锁定条数
+        QueryWrapper<ContractsScore> wrapper1 = new QueryWrapper<>();
+        wrapper1.eq("assessment_time", date);
+
+        // 获取所有评分记录
+        List<ContractsScore> resList = contractsScoreService.list(wrapper1);
+        List<Long> ids = resList.stream().map(ContractsScore::getContract_id).collect(Collectors.toList());
+
+        // 根据合同 ID 获取 PerformanceContracts 数据
+        QueryWrapper<PerformanceContracts> wrapper2 = new QueryWrapper<>();
+        wrapper2.in("id", ids);
+        wrapper2.eq("assessment_dept", userDept);
+
+        List<PerformanceContracts> performanceContracts = this.list(wrapper2);
+
+        // 将 ContractsScore 和 PerformanceContracts 转换成 ExcelVO
+        List<ExcelVO> excelData = convertToExcelVO(resList, performanceContracts);
+
+        return excelData;
+    }
+
+    @Override
+    public boolean saveRes(MultipartFile multipartFile) throws IOException {
+        // 校验文件类型和大小
+        if (multipartFile.isEmpty() || !multipartFile.getOriginalFilename().endsWith(".xlsx")) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "请上传Excel文件");
+        }
+        // 创建临时文件夹
+        String tempDir = System.getProperty("user.dir") + File.separator + "excel_temp_" + System.currentTimeMillis();
+        File dir = new File(tempDir);
+        if (!dir.exists()) {
+            dir.mkdirs();
+        }
+
+        try {
+            // 将文件保存到临时文件夹中
+            Path filePath = Paths.get(tempDir, multipartFile.getOriginalFilename());
+            multipartFile.transferTo(filePath.toFile());
+
+            // 存储子表数据：子表名 -> 子表内容
+            Map<String, List<List<String>>> sheetDataMap = new HashMap<>();
+
+            // 使用保存后的文件进行读取
+            try (Workbook workbook = new XSSFWorkbook(new FileInputStream(filePath.toFile()))) {
+                int numberOfSheets = workbook.getNumberOfSheets();
+
+                // 遍历每个子表（Sheet）
+                for (int i = 0; i < numberOfSheets; i++) {
+                    Sheet sheet = workbook.getSheetAt(i);
+                    String sheetName = sheet.getSheetName(); // 获取子表名称
+                    // 存储当前子表的数据
+                    List<List<String>> sheetContent = new ArrayList<>();
+
+                    // 遍历行
+                    for (Row row : sheet) {
+                        List<String> rowData = new ArrayList<>();
+
+                        // 遍历单元格
+                        for (Cell cell : row) {
+                            // 根据单元格类型获取内容
+                            switch (cell.getCellType()) {
+                                case STRING:
+                                    rowData.add(cell.getStringCellValue());
+                                    break;
+                                case NUMERIC:
+                                    rowData.add(String.valueOf(cell.getNumericCellValue()));
+                                    break;
+                                default:
+                                    rowData.add(""); // 空单元格
+                            }
+                        }
+                        sheetContent.add(rowData);
+                    }
+                    // 将当前子表的内容存入 Map
+                    sheetDataMap.put(sheetName, sheetContent);
+                }
+            }
+            return this.saveRes2Database(sheetDataMap);
+
+        } catch (IOException e) {
+            e.printStackTrace();
+            throw new BusinessException(ErrorCode.OPERATION_ERROR, "数据保存失败");
+        } finally {
+            deleteDirectory(dir);
+        }
+    }
+
+    private boolean saveRes2Database(Map<String, List<List<String>>> sheetDataMap) {
+        try {
+            // 遍历每个子表
+            for (Map.Entry<String, List<List<String>>> entry : sheetDataMap.entrySet()) {
+                List<List<String>> sheetData = entry.getValue(); // 子表数据
+
+                // 批量操作集合
+                Map<Long, Double> scores = new HashMap<>();
+
+                // 遍历当前子表的每一行，跳过第一行（表头）
+                for (int rowIndex = 1; rowIndex < sheetData.size(); rowIndex++) {
+                    List<String> row = sheetData.get(rowIndex);
+
+                    // 数据提取（允许空值）
+                    String column1 = row.size() > 2 ? row.get(2) : null; // 指标
+                    String column2 = row.size() > 3 ? row.get(3) : null; // 考核部门
+                    String column3 = row.size() > 9 ? row.get(9) : null; // 被考核人
+                    String scoreStr = row.size() > 11 ? row.get(11) : "0"; // 得分（默认0）
+
+                    double score;
+                    try {
+                        score = Double.parseDouble(scoreStr); // 转换得分
+                    } catch (NumberFormatException e) {
+                        score = 0.0; // 解析失败时默认得分为 0
+                    }
+
+                    // 查询 PerformanceContracts 表
+                    QueryWrapper<PerformanceContracts> wrapper = new QueryWrapper<>();
+                    wrapper.eq("indicators", column1)
+                            .eq("assessment_dept", column2)
+                            .eq("assessed_people", column3);
+
+                    PerformanceContracts one = this.getOne(wrapper);
+                    if (one != null) { // 如果找到对应记录
+                        Long id = one.getId();
+                        scores.put(id, score); // 保存到批量操作集合
+                    } else {
+                        // 日志记录或特殊处理：无法找到匹配的合同
+                        throw new BusinessException(ErrorCode.OPERATION_ERROR,"未发布该合同！");
+                    }
+                }
+
+                String date = getCurrentDateAsDate(); // 获取当前日期作为字符串
+
+                // 批量更新操作
+                for (Map.Entry<Long, Double> each : scores.entrySet()) {
+                    Long id = each.getKey();
+                    Double score = each.getValue();
+
+                    // 查询 ContractsScore 表
+                    QueryWrapper<ContractsScore> wrapper = new QueryWrapper<>();
+                    wrapper.eq("contract_id", id)
+                            .eq("assessment_time", date);
+
+                    ContractsScore contractScore = contractsScoreService.getOne(wrapper);
+                    if (contractScore != null) {
+                        contractScore.setScore(score); // 更新得分
+                        contractsScoreService.updateById(contractScore);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            // 记录错误日志以便调试
+            throw new BusinessException(ErrorCode.OPERATION_ERROR,"批量评分失败!");
+        }
+        return true; // 返回成功
+    }
+
+
+    /**
+     * 删除文件夹及内容
+     *
+     * @param dir
+     * @throws IOException
+     */
+    private void deleteDirectory(File dir) throws IOException {
+        if (dir.exists()) {
+            if (dir.isDirectory()) {
+                File[] files = dir.listFiles();
+                if (files != null) {
+                    for (File file : files) {
+                        deleteDirectory(file);
+                    }
+                }
+            }
+            Files.delete(dir.toPath());
+        }
+    }
 
 }
 

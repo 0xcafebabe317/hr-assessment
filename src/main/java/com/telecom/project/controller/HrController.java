@@ -1,11 +1,18 @@
 package com.telecom.project.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.telecom.project.annotation.AuthCheck;
 import com.telecom.project.common.BaseResponse;
+import com.telecom.project.common.ErrorCode;
+import com.telecom.project.common.PageRequest;
 import com.telecom.project.common.ResultUtils;
+import com.telecom.project.exception.BusinessException;
 import com.telecom.project.model.dto.contracts.AnnouncementRequest;
+import com.telecom.project.model.dto.hr.ArgueScoreRequest;
+import com.telecom.project.model.dto.hr.ScorePageRequest;
 import com.telecom.project.model.entity.Announcement;
+import com.telecom.project.model.entity.PerformanceContracts;
 import com.telecom.project.service.AnnouncementService;
 import com.telecom.project.service.HrService;
 import com.telecom.project.utils.ExcelUtil;
@@ -49,20 +56,20 @@ public class HrController {
      */
     @RequestMapping("/publish")
     @AuthCheck(mustRole = "hr")
-    public BaseResponse<Boolean> publish(HttpServletRequest request) {
-        boolean res = hrService.publish(request);
+    public BaseResponse<Boolean> publish() {
+        boolean res = hrService.publish();
         return ResultUtils.success(res);
     }
 
     /**
-     * 计算打分表
+     * 锁定评分表
      *
      * @return
      */
     @RequestMapping("/lock")
     @AuthCheck(mustRole = "hr")
-    public BaseResponse<Boolean> lock(HttpServletRequest request) {
-        boolean res = hrService.lock(request);
+    public BaseResponse<Boolean> lock() {
+        boolean res = hrService.lock();
         return ResultUtils.success(res);
     }
 
@@ -108,6 +115,11 @@ public class HrController {
     }
 
 
+    /**
+     * 发布公告
+     * @param announcementRequest
+     * @return
+     */
     @RequestMapping("publish/announcement")
     @AuthCheck(mustRole = "hr")
     public BaseResponse<Boolean> publishAnnouncement (@RequestBody AnnouncementRequest announcementRequest)  {
@@ -118,6 +130,10 @@ public class HrController {
         return ResultUtils.success(save);
     }
 
+    /**
+     * 获取公告内容
+     * @return
+     */
     @RequestMapping("get/announcement")
     public BaseResponse<Announcement> getAnnouncement() {
         QueryWrapper<Announcement> wrapper = new QueryWrapper<>();
@@ -130,6 +146,71 @@ public class HrController {
         }
         return ResultUtils.success(new Announcement());  // 如果没有公告，返回空公告
     }
+
+
+    /**
+     * 获取所有打分页面
+     *
+     * @param scorepageRequest
+     * @param request
+     * @return
+     */
+    @RequestMapping("get/contracts/score")
+    @AuthCheck(mustRole = "hr")
+    public BaseResponse<Page<PerformanceContracts>> getContractsScore(@RequestBody ScorePageRequest scorepageRequest, HttpServletRequest request) {
+        Page<PerformanceContracts> res = hrService.getContractsScore(scorepageRequest, request);
+        return ResultUtils.success(res);
+    }
+
+    /**
+     * 修改争议评分
+     * @param argueScoreRequest
+     * @return
+     */
+    @RequestMapping("argue/score")
+    @AuthCheck(mustRole = "hr")
+    public BaseResponse<Boolean> ScoreArgue(@RequestBody ArgueScoreRequest argueScoreRequest){
+        if(argueScoreRequest == null){
+            throw new BusinessException(ErrorCode.PARAMS_ERROR,"未修改数据");
+        }
+        boolean res = hrService.updateScore(argueScoreRequest);
+        return ResultUtils.success(res);
+    }
+
+    /**
+     * 公示结果
+     * @return
+     */
+    @RequestMapping("/public")
+    @AuthCheck(mustRole = "hr")
+    public BaseResponse<Boolean> Public(){
+        boolean res = hrService.publicRes();
+        return ResultUtils.success(res);
+    }
+
+    /**
+     * 结束公示
+     * @return
+     */
+    @RequestMapping("/unPublic")
+    @AuthCheck(mustRole = "hr")
+    public BaseResponse<Boolean> unPublic(){
+        boolean res = hrService.unPublicRes();
+        return ResultUtils.success(res);
+    }
+
+    /**
+     * 冻结
+     * @return
+     */
+    @RequestMapping("/freeze")
+    @AuthCheck(mustRole = "hr")
+    public BaseResponse<Boolean> freeze(){
+        boolean res = hrService.freeze();
+        return ResultUtils.success(res);
+    }
+
+
 
 
 }

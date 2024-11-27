@@ -1,16 +1,19 @@
-package com.telecom.project.common;
+package com.telecom.project.model.dto.hr;
 
 import com.telecom.project.constant.CommonConstant;
 import lombok.Data;
 
 /**
- * 分页请求
- *
- * @author 唐玮志
- */
+ * @author: Toys
+ * @date: 2024年11月20 17:59
+ **/
 @Data
-public class PageRequest {
+public class ScorePageRequest {
 
+    /**
+     * 搜索内容
+     */
+    private String searchText;
     /**
      * 当前页号
      */

@@ -7,8 +7,11 @@ import com.telecom.project.model.dto.contracts.*;
 import com.telecom.project.model.entity.PerformanceContracts;
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.telecom.project.model.vo.ContractsVO;
+import com.telecom.project.model.vo.ExcelVO;
+import org.springframework.web.multipart.MultipartFile;
 
 import javax.servlet.http.HttpServletRequest;
+import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 
@@ -42,4 +45,18 @@ public interface PerformanceContractsService extends IService<PerformanceContrac
     boolean updateContract(UpdateRequest updateRequest);
 
     boolean deleteContract(IdRequest idRequest);
+
+    Page<PerformanceContracts> getPublicResult(PageRequest pageRequest, HttpServletRequest request);
+
+    boolean confirm(HttpServletRequest request);
+
+    boolean isConfirm(HttpServletRequest request);
+
+    boolean dispute(HttpServletRequest request);
+
+    boolean isDispute(HttpServletRequest request);
+
+    List<ExcelVO> getAllContracts(HttpServletRequest request);
+
+    boolean saveRes(MultipartFile multipartFile) throws IOException;
 }

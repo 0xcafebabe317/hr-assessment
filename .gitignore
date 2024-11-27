@@ -31,3 +31,7 @@ build/
 
 ### VS Code ###
 .vscode/
+/src/test/java/com/telecom/project/service/UserServiceTest.java
+/src/main/resources/application-prod.yml
+/src/main/resources/application.yml
+/sql/ddl.sql
