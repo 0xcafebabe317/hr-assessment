@@ -167,7 +167,7 @@ public class PerformanceContractsServiceImpl extends ServiceImpl<PerformanceCont
             return list;
             // bu
         } else {
-            wrapper.eq("assessed_center", assessedUnit);
+            wrapper.eq("assessed_unit", assessedUnit);
             wrapper.eq("assessed_center", assessedCenter);
             wrapper.eq("assessed_people", assessedPeople);
             return this.list(wrapper);
@@ -435,6 +435,9 @@ public class PerformanceContractsServiceImpl extends ServiceImpl<PerformanceCont
         wrapper.eq("unit", userDept);
         wrapper.eq("name", userName);
         Confirm one = confirmService.getOne(wrapper);
+        if(one == null){
+            return false;
+        }
         if (one.getIsConfirm() == 1) {
             return true;
         }
@@ -470,6 +473,9 @@ public class PerformanceContractsServiceImpl extends ServiceImpl<PerformanceCont
         wrapper.eq("unit", userDept);
         wrapper.eq("name", userName);
         Confirm one = confirmService.getOne(wrapper);
+        if(one == null){
+            return false;
+        }
         if (one.getIsDispute() == 1) {
             return true;
         }

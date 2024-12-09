@@ -5,7 +5,6 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.telecom.project.annotation.AuthCheck;
 import com.telecom.project.common.BaseResponse;
 import com.telecom.project.common.ErrorCode;
-import com.telecom.project.common.PageRequest;
 import com.telecom.project.common.ResultUtils;
 import com.telecom.project.exception.BusinessException;
 import com.telecom.project.model.dto.contracts.AnnouncementRequest;
@@ -13,12 +12,12 @@ import com.telecom.project.model.dto.hr.ArgueScoreRequest;
 import com.telecom.project.model.dto.hr.ScorePageRequest;
 import com.telecom.project.model.entity.Announcement;
 import com.telecom.project.model.entity.PerformanceContracts;
+import com.telecom.project.model.entity.Publicity;
 import com.telecom.project.service.AnnouncementService;
 import com.telecom.project.service.HrService;
+import com.telecom.project.service.PublicityService;
 import com.telecom.project.utils.ExcelUtil;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.poi.ss.usermodel.*;
-import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -26,11 +25,11 @@ import org.springframework.web.bind.annotation.RestController;
 import javax.annotation.Resource;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
-import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
 import java.util.List;
+
+import static com.telecom.project.utils.DateUtil.getCurrentDateAsDate;
 
 /**
  * @author: Toys
@@ -44,6 +43,9 @@ public class HrController {
 
     @Resource
     private HrService hrService;
+
+    @Resource
+    private PublicityService publicityService;
 
     @Resource
     private AnnouncementService announcementService;
@@ -99,12 +101,21 @@ public class HrController {
 
     /**
      * 导出业绩合同excel
+     *
      * @param response
      * @throws IOException
      */
     @RequestMapping("export/excel")
     @AuthCheck(mustRole = "hr")
-    public void exportExcel(HttpServletResponse response) throws IOException {
+    public BaseResponse<String> exportExcel(HttpServletResponse response) throws IOException {
+
+        String date = getCurrentDateAsDate();
+        QueryWrapper<Publicity> pubWrapper = new QueryWrapper<>();
+        pubWrapper.eq("assessment_time", date);
+        Publicity one = publicityService.getOne(pubWrapper);
+        if (one == null || one.getIsFreeze() == 0) {
+            throw new BusinessException(ErrorCode.OPERATION_ERROR, "当前评分表尚未结束流程，请于本月23日18:30后导出结果！");
+        }
         // 设置文件响应头
         response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
         response.setHeader("Content-Disposition", "attachment; filename=contracts.xlsx");
@@ -112,17 +123,19 @@ public class HrController {
         // 获取数据并写入 Excel
         ByteArrayOutputStream outputStream = ExcelUtil.exportUsersToExcel(hrService.getAllContracts());
         response.getOutputStream().write(outputStream.toByteArray());
+        return ResultUtils.success("导出成功");
     }
 
 
     /**
      * 发布公告
+     *
      * @param announcementRequest
      * @return
      */
     @RequestMapping("publish/announcement")
     @AuthCheck(mustRole = "hr")
-    public BaseResponse<Boolean> publishAnnouncement (@RequestBody AnnouncementRequest announcementRequest)  {
+    public BaseResponse<Boolean> publishAnnouncement(@RequestBody AnnouncementRequest announcementRequest) {
         String content = announcementRequest.getContent();
         Announcement announcement = new Announcement();
         announcement.setContent(content);
@@ -132,6 +145,7 @@ public class HrController {
 
     /**
      * 获取公告内容
+     *
      * @return
      */
     @RequestMapping("get/announcement")
@@ -164,14 +178,15 @@ public class HrController {
 
     /**
      * 修改争议评分
+     *
      * @param argueScoreRequest
      * @return
      */
     @RequestMapping("argue/score")
     @AuthCheck(mustRole = "hr")
-    public BaseResponse<Boolean> ScoreArgue(@RequestBody ArgueScoreRequest argueScoreRequest){
-        if(argueScoreRequest == null){
-            throw new BusinessException(ErrorCode.PARAMS_ERROR,"未修改数据");
+    public BaseResponse<Boolean> ScoreArgue(@RequestBody ArgueScoreRequest argueScoreRequest) {
+        if (argueScoreRequest == null) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "未修改数据");
         }
         boolean res = hrService.updateScore(argueScoreRequest);
         return ResultUtils.success(res);
@@ -179,38 +194,39 @@ public class HrController {
 
     /**
      * 公示结果
+     *
      * @return
      */
     @RequestMapping("/public")
     @AuthCheck(mustRole = "hr")
-    public BaseResponse<Boolean> Public(){
+    public BaseResponse<Boolean> Public() {
         boolean res = hrService.publicRes();
         return ResultUtils.success(res);
     }
 
     /**
      * 结束公示
+     *
      * @return
      */
     @RequestMapping("/unPublic")
     @AuthCheck(mustRole = "hr")
-    public BaseResponse<Boolean> unPublic(){
+    public BaseResponse<Boolean> unPublic() {
         boolean res = hrService.unPublicRes();
         return ResultUtils.success(res);
     }
 
     /**
      * 冻结
+     *
      * @return
      */
     @RequestMapping("/freeze")
     @AuthCheck(mustRole = "hr")
-    public BaseResponse<Boolean> freeze(){
+    public BaseResponse<Boolean> freeze() {
         boolean res = hrService.freeze();
         return ResultUtils.success(res);
     }
-
-
 
 
 }

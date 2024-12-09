@@ -62,7 +62,7 @@ public class EmailTask {
         // 发邮件提醒
         String date = getCurrentDateAsDate();
         String subject = "【"+date+"业绩考核评分提醒】";
-        String content = "请于"+date+"15号下午18:30之前前往业绩考核评分系统进行评分，过时将会锁定评分，待公示期前往人力资源部进行补评。";
+        String content = "请于"+date+"15号下午18:30之前前往业绩考核评分系统进行评分，过时将会锁定评分，待公示期前往人力资源部进行补评。评分地址：118.25.230.183";
         for(String mail : mailList){
             mailService.sendSimpleMail(mail,subject,content);
         }
@@ -143,7 +143,7 @@ public class EmailTask {
 
 
     /**
-     * 自动冻结，冻结后人力不可修改评分
+     * 每月23日18：:30冻结，冻结后人力不可修改评分
      */
     @Scheduled(cron = "0 30 18 23 * ?")
     public void freeze(){
