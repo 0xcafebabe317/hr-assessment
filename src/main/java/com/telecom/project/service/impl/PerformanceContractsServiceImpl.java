@@ -22,6 +22,7 @@ import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.CollectionUtils;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -95,10 +96,13 @@ public class PerformanceContractsServiceImpl extends ServiceImpl<PerformanceCont
         pc.setAssessment_dept(assessment_dept);
         // 权重
         Integer weight = performanceContracts.getWeight();
-        if (weight <= 0 || weight >= 100) {
-            throw new BusinessException(ErrorCode.PARAMS_ERROR, "权重范围应在1～99");
+        if (weight != null) {
+            if (weight <= 0 || weight >= 100) {
+                throw new BusinessException(ErrorCode.PARAMS_ERROR, "权重范围应在1～99");
+            }
+            pc.setWeight(weight);
         }
-        pc.setWeight(weight);
+
         // 记分方法
         String scoring_method = performanceContracts.getScoring_method();
         pc.setScoring_method(scoring_method);
@@ -117,6 +121,14 @@ public class PerformanceContractsServiceImpl extends ServiceImpl<PerformanceCont
         // 其他
         String other = performanceContracts.getOther();
         pc.setOther(other);
+        QueryWrapper<PerformanceContracts> wrapper = new QueryWrapper<>();
+        wrapper.eq("assessment_dept", assessment_dept)
+                .eq("scoring_method", scoring_method)
+                .eq("assessed_people", assessed_people);
+        List<PerformanceContracts> list = this.list(wrapper);
+        if (list.size() > 0) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "该条数据已经存在！");
+        }
         return this.save(pc);
     }
 
@@ -175,21 +187,29 @@ public class PerformanceContractsServiceImpl extends ServiceImpl<PerformanceCont
     }
 
     @Override
-    public Page<PerformanceContracts> getContractsScore(PageRequest pageRequest, HttpServletRequest request) {
-        long current = pageRequest.getCurrent();
-        long pageSize = pageRequest.getPageSize();
+    public Page<PerformanceContracts> getContractsScore(UserScoreRequest userScoreRequest, HttpServletRequest request) {
+        long current = userScoreRequest.getCurrent();
+        long pageSize = userScoreRequest.getPageSize();
+        String searchText = userScoreRequest.getSearchText();
 
         User loginUser = userService.getLoginUser(request);
         String userDept = loginUser.getUserDept();
         String userRole = loginUser.getUserRole();
         // 确定是打分人
-        if (!userRole.equals("score")) {
+        if (!userRole.equals("score") && !userRole.equals("hr")) {
             return null;
         }
 
+
         // 本部门要打分的细则
         QueryWrapper<PerformanceContracts> wrapper = new QueryWrapper<>();
-        wrapper.eq("assessment_dept", userDept);
+        wrapper.eq("assessment_dept", userDept)
+                .and(w -> w.like("assessed_people", searchText)
+                        .or()
+                        .like("assessed_unit", searchText)
+                        .or()
+                        .like("assessed_center", searchText));
+
         List<PerformanceContracts> list = this.list(wrapper);
 
         // 本部门要打分的id集合
@@ -350,7 +370,7 @@ public class PerformanceContractsServiceImpl extends ServiceImpl<PerformanceCont
         QueryWrapper<Publicity> wrapper = new QueryWrapper<>();
         wrapper.eq("assessment_time", date);
         Publicity one = publicityService.getOne(wrapper);
-        if (one.getIsPublic() != 1L) {
+        if (one == null || one.getIsPublic() != 1L) {
             return null;
         }
 
@@ -362,7 +382,6 @@ public class PerformanceContractsServiceImpl extends ServiceImpl<PerformanceCont
         String userName = loginUser.getUserName();
 
 
-        // 本部门要打分的细则
         QueryWrapper<PerformanceContracts> wrapper1 = new QueryWrapper<>();
         wrapper1.eq("assessed_unit", userDept);
         wrapper1.eq("assessed_people", userName);
@@ -418,10 +437,14 @@ public class PerformanceContractsServiceImpl extends ServiceImpl<PerformanceCont
         wrapper.eq("name", userName);
         Confirm one = confirmService.getOne(wrapper);
         if (one == null) {
-            throw new BusinessException(ErrorCode.OPERATION_ERROR, "没有该评分记录!");
+            Confirm confirm = new Confirm();
+            confirm.setName(userName);
+            confirm.setUnit(userDept);
+            confirm.setAssessment_time(date);
+            confirm.setIsConfirm(1);
+            return confirmService.save(confirm);
         }
-        one.setIsConfirm(1);
-        return confirmService.updateById(one);
+        return false;
     }
 
     @Override
@@ -435,7 +458,7 @@ public class PerformanceContractsServiceImpl extends ServiceImpl<PerformanceCont
         wrapper.eq("unit", userDept);
         wrapper.eq("name", userName);
         Confirm one = confirmService.getOne(wrapper);
-        if(one == null){
+        if (one == null) {
             return false;
         }
         if (one.getIsConfirm() == 1) {
@@ -456,10 +479,14 @@ public class PerformanceContractsServiceImpl extends ServiceImpl<PerformanceCont
         wrapper.eq("name", userName);
         Confirm one = confirmService.getOne(wrapper);
         if (one == null) {
-            throw new BusinessException(ErrorCode.OPERATION_ERROR, "没有该评分记录!");
+            Confirm confirm = new Confirm();
+            confirm.setName(userName);
+            confirm.setUnit(userDept);
+            confirm.setAssessment_time(date);
+            confirm.setIsDispute(1);
+            return confirmService.save(confirm);
         }
-        one.setIsDispute(1);
-        return confirmService.updateById(one);
+        return false;
     }
 
     @Override
@@ -473,7 +500,7 @@ public class PerformanceContractsServiceImpl extends ServiceImpl<PerformanceCont
         wrapper.eq("unit", userDept);
         wrapper.eq("name", userName);
         Confirm one = confirmService.getOne(wrapper);
-        if(one == null){
+        if (one == null) {
             return false;
         }
         if (one.getIsDispute() == 1) {
@@ -521,6 +548,7 @@ public class PerformanceContractsServiceImpl extends ServiceImpl<PerformanceCont
     }
 
     @Override
+    @Transactional
     public boolean saveRes(MultipartFile multipartFile) throws IOException {
         // 校验文件类型和大小
         if (multipartFile.isEmpty() || !multipartFile.getOriginalFilename().endsWith(".xlsx")) {
@@ -586,6 +614,42 @@ public class PerformanceContractsServiceImpl extends ServiceImpl<PerformanceCont
         }
     }
 
+    @Override
+    public double getTotal(HttpServletRequest request) {
+        User loginUser = userService.getLoginUser(request);
+        QueryWrapper<PerformanceContracts> wrapper = new QueryWrapper<>();
+        wrapper.eq("assessed_people", loginUser.getUserName());
+        List<PerformanceContracts> list = this.list(wrapper);
+        List<Long> ids = list.stream().map(item -> item.getId()).collect(Collectors.toList());
+        QueryWrapper<ContractsScore> wrapper1 = new QueryWrapper<>();
+        wrapper1.in("contract_id", ids);
+        List<ContractsScore> list1 = contractsScoreService.list(wrapper1);
+        double totalScore = list1.stream()
+                .map(item -> item.getScore()) // 获取每个 item 的 score
+                .reduce(0.0, Double::sum);    // 累加所有 score 值，初始值为 0
+        return totalScore;
+    }
+
+    /**
+     * 根据名字获取总分
+     *
+     * @param name
+     * @return
+     */
+    public double getScoreByName(String name) {
+        QueryWrapper<PerformanceContracts> wrapper = new QueryWrapper<>();
+        wrapper.eq("assessed_people", name);
+        List<PerformanceContracts> list = this.list(wrapper);
+        List<Long> ids = list.stream().map(item -> item.getId()).collect(Collectors.toList());
+        QueryWrapper<ContractsScore> wrapper1 = new QueryWrapper<>();
+        wrapper1.in("contract_id", ids);
+        List<ContractsScore> list1 = contractsScoreService.list(wrapper1);
+        double totalScore = list1.stream()
+                .map(item -> item.getScore()) // 获取每个 item 的 score
+                .reduce(0.0, Double::sum);    // 累加所有 score 值，初始值为 0
+        return totalScore;
+    }
+
     private boolean saveRes2Database(Map<String, List<List<String>>> sheetDataMap) {
         try {
             // 遍历每个子表
@@ -602,7 +666,9 @@ public class PerformanceContractsServiceImpl extends ServiceImpl<PerformanceCont
                     // 数据提取（允许空值）
                     String column1 = row.size() > 2 ? row.get(2) : null; // 指标
                     String column2 = row.size() > 3 ? row.get(3) : null; // 考核部门
-                    String column3 = row.size() > 9 ? row.get(9) : null; // 被考核人
+                    String column3 = row.size() > 7 ? row.get(7) : null; // 被考核单位
+                    String column4 = row.size() > 8 ? row.get(8) : null; // 被考核中心
+                    String column5 = row.size() > 9 ? row.get(9) : null; // 被考核人
                     String scoreStr = row.size() > 11 ? row.get(11) : "0"; // 得分（默认0）
 
                     double score;
@@ -616,7 +682,9 @@ public class PerformanceContractsServiceImpl extends ServiceImpl<PerformanceCont
                     QueryWrapper<PerformanceContracts> wrapper = new QueryWrapper<>();
                     wrapper.eq("indicators", column1)
                             .eq("assessment_dept", column2)
-                            .eq("assessed_people", column3);
+                            .eq("assessed_unit", column3)
+                            .eq("assessed_center", column4)
+                            .eq("assessed_people", column5);
 
                     PerformanceContracts one = this.getOne(wrapper);
                     if (one != null) { // 如果找到对应记录
@@ -624,7 +692,7 @@ public class PerformanceContractsServiceImpl extends ServiceImpl<PerformanceCont
                         scores.put(id, score); // 保存到批量操作集合
                     } else {
                         // 日志记录或特殊处理：无法找到匹配的合同
-                        throw new BusinessException(ErrorCode.OPERATION_ERROR,"未发布该合同！");
+                        throw new BusinessException(ErrorCode.OPERATION_ERROR, "未发布该合同！");
                     }
                 }
 
@@ -646,10 +714,11 @@ public class PerformanceContractsServiceImpl extends ServiceImpl<PerformanceCont
                         contractsScoreService.updateById(contractScore);
                     }
                 }
+                System.out.println(entry.getKey() + "已保存");
             }
         } catch (Exception e) {
             // 记录错误日志以便调试
-            throw new BusinessException(ErrorCode.OPERATION_ERROR,"批量评分失败!");
+            throw new BusinessException(ErrorCode.OPERATION_ERROR, "批量评分失败!");
         }
         return true; // 返回成功
     }

@@ -82,8 +82,13 @@ public class HrServiceImpl implements HrService {
         if (b) {
             // 初始化公示表
             Publicity publicity = new Publicity();
-            publicity.setAssessment_time(currentDate);
-            publicityService.save(publicity);
+            QueryWrapper<Publicity> publicityQueryWrapper = new QueryWrapper<>();
+            publicityQueryWrapper.eq("assessment_time", currentDate);
+            Publicity one = publicityService.getOne(publicityQueryWrapper);
+            if (one == null) {
+                publicity.setAssessment_time(currentDate);
+                publicityService.save(publicity);
+            }
             QueryWrapper<User> userWrapper = new QueryWrapper<>();
             wrapper.eq("userRole", "score");
 
@@ -98,7 +103,7 @@ public class HrServiceImpl implements HrService {
             String date = getCurrentDateAsDate();
             String subject = date + "业绩合同评分系统开放提醒";
             // 内容
-            String content = "【人力资源部】已经发布了" + date + "业绩合同评分表，请尽快前往评分系统进行评分。";
+            String content = "【人力资源部】已经发布了" + date + "业绩合同评分表，请尽快前往业绩评分系统进行评分，评分地址：118.25.230.183";
 
             List<String> collect = validEmailUsers.stream().map(User::getEmail).collect(Collectors.toList());
             for (String email : collect) {
@@ -111,6 +116,118 @@ public class HrServiceImpl implements HrService {
     @Override
     public boolean lock() {
         String currentDate = getCurrentDateAsDate();
+        // 计算各县局局长的评分并且补充到其他三个中心的评分里面
+        QueryWrapper<PerformanceContracts> wrapper = new QueryWrapper<>();
+        wrapper.eq("assessed_center", "CEO");
+        List<PerformanceContracts> ceos = performanceContractsService.list(wrapper);
+        // <巴宜区,[1，2，,3，,4]>  哪一个区的所有id
+        // 创建一个 Map 用于存储分组结果
+        Map<String, List<Long>> map = ceos.stream()
+                .collect(Collectors.groupingBy(
+                        PerformanceContracts::getAssessed_unit, // 根据 assessed_unit 字段分组
+                        Collectors.mapping(PerformanceContracts::getId, Collectors.toList()) // 提取 id 并收集为 List
+                ));
+
+        // CEO总分 <巴宜区,88.8>
+        Map<String, Double> ceoScore = new HashMap<>();
+        for (Map.Entry<String, List<Long>> entry : map.entrySet()) {
+            // 对应区县的名称和 CEO的考核细则
+            String assessedUnit = entry.getKey(); // 获取 assessed_unit
+            List<Long> ids = entry.getValue();   // 获取对应的 id 列表
+            QueryWrapper<ContractsScore> wrapper1 = new QueryWrapper<>();
+            wrapper1.in("contract_id", ids);
+            List<ContractsScore> list = contractsScoreService.list(wrapper1);
+            double totalScore = list.stream()
+                    .mapToDouble(ContractsScore::getScore) // 映射为 double
+                    .sum(); // 求和
+            ceoScore.put(assessedUnit, totalScore);
+        }
+        // 政企、公众 30%  综维 20%
+        // 政企
+        QueryWrapper<PerformanceContracts> wrapper3 = new QueryWrapper<>();
+        wrapper3.eq("assessed_center", "政企中心");
+        wrapper3.eq("indicators", "县（支）局业绩得分");
+        List<PerformanceContracts> list = performanceContractsService.list(wrapper3);
+        // <巴宜区,2>
+        Map<Long, String> map1 = list.stream()
+                .collect(Collectors.toMap(
+                        PerformanceContracts::getId,           // 以 id 作为键
+                        PerformanceContracts::getAssessed_unit, // 以 assessed_unit 作为值
+                        (existing, replacement) -> replacement // 如果有重复键，保留最新的值
+                ));
+
+        QueryWrapper<ContractsScore> wrapper1 = new QueryWrapper<>();
+        Set<Long> ids = map1.keySet();
+        wrapper1.in("contract_id", ids);
+        List<ContractsScore> list1 = contractsScoreService.list(wrapper1);
+        for (ContractsScore item : list1) {
+            Long contractId = item.getContract_id();
+            String unit = map1.get(contractId);
+            // 从ceoScore找到ceo的分
+            Double aDouble = ceoScore.get(unit);
+            // 政企30%
+            double resScore = Math.round(aDouble * 0.3 * 100) / 100.0; // 保留两位小数
+            item.setScore(resScore);
+            contractsScoreService.updateById(item);
+        }
+
+        // 公众
+        QueryWrapper<PerformanceContracts> wrapper4 = new QueryWrapper<>();
+        wrapper4.eq("assessed_center", "公众商客");
+        wrapper4.eq("indicators", "县（支）局业绩得分");
+        List<PerformanceContracts> list2 = performanceContractsService.list(wrapper4);
+        // <2，巴宜区>
+        Map<Long, String> map2 = list2.stream()
+                .collect(Collectors.toMap(
+                        PerformanceContracts::getId,           // 以 id 作为键
+                        PerformanceContracts::getAssessed_unit, // 以 assessed_unit 作为值
+                        (existing, replacement) -> replacement // 如果有重复键，保留最新的值
+                ));
+
+        QueryWrapper<ContractsScore> wrapper5 = new QueryWrapper<>();
+        Set<Long> ids1 = map2.keySet();
+        wrapper5.in("contract_id", ids1);
+        List<ContractsScore> list3 = contractsScoreService.list(wrapper5);
+        for (ContractsScore item : list3) {
+            Long contractId = item.getContract_id();
+            String unit = map2.get(contractId);
+            // 从ceoScore找到ceo的分
+            Double aDouble = ceoScore.get(unit);
+            // 公众30%
+            double resScore = Math.round(aDouble * 0.3 * 100) / 100.0; // 保留两位小数
+            item.setScore(resScore);
+            contractsScoreService.updateById(item);
+        }
+
+        // 综维
+        QueryWrapper<PerformanceContracts> wrapper6 = new QueryWrapper<>();
+        wrapper6.eq("assessed_center", "综维中心");
+        wrapper6.eq("indicators", "县（支）局业绩得分");
+        List<PerformanceContracts> list4 = performanceContractsService.list(wrapper6);
+        // <2,巴宜区>
+        Map<Long, String> map3 = list4.stream()
+                .collect(Collectors.toMap(
+                        PerformanceContracts::getId,           // 以 id 作为键
+                        PerformanceContracts::getAssessed_unit, // 以 assessed_unit 作为值
+                        (existing, replacement) -> replacement // 如果有重复键，保留最新的值
+                ));
+
+        QueryWrapper<ContractsScore> wrapper7 = new QueryWrapper<>();
+        Set<Long> ids3 = map3.keySet();
+        wrapper7.in("contract_id", ids3);
+        List<ContractsScore> list5 = contractsScoreService.list(wrapper7);
+        for (ContractsScore item : list5) {
+            Long contractId = item.getContract_id();
+            String unit = map3.get(contractId);
+            // 从ceoScore找到ceo的分
+            Double aDouble = ceoScore.get(unit);
+            // 综维20%
+            double resScore = Math.round(aDouble * 0.2 * 100) / 100.0; // 保留两位小数
+            item.setScore(resScore);
+            contractsScoreService.updateById(item);
+        }
+
+
         return contractsScoreMapper.lockRes(currentDate);
     }
 
@@ -156,15 +273,20 @@ public class HrServiceImpl implements HrService {
         QueryWrapper<User> scoreDeptWrapper = new QueryWrapper<>();
         String scoreSubject = date + "业绩合同评分提醒";
         // 内容
-        String scoreContent = "请尽快前往业绩合同评分系统进行评分提交。";
+        String scoreContent = "请尽快前往业绩合同评分系统进行评分提交，逾期将锁定评分表，评分地址：118.25.230.183";
         // 打分部门
         scoreDeptWrapper.eq("userRole", "score");
         scoreDeptWrapper.in("userDept", depts);
         List<User> users = userService.list(scoreDeptWrapper);
-        List<String> scoreEmails = users.stream().map(User::getEmail).collect(Collectors.toList());
+        List<String> scoreEmails = users.stream()
+                .map(User::getEmail)
+                .filter(Objects::nonNull) // 过滤掉 email 为 null 的数据
+                .collect(Collectors.toList());
+
         for (String email : scoreEmails) {
             mailService.sendSimpleMail(email, scoreSubject, scoreContent);
         }
+
         return true;
     }
 
@@ -316,12 +438,12 @@ public class HrServiceImpl implements HrService {
         QueryWrapper<Publicity> pubWrapper = new QueryWrapper<>();
         pubWrapper.eq("assessment_time", date);
         Publicity one = publicityService.getOne(pubWrapper);
-        if(one == null){
-            throw new BusinessException(ErrorCode.PARAMS_ERROR,"本月还未发布业绩合同!");
+        if (one == null) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "本月还未发布业绩合同!");
         }
         // 还未处于修改阶段
-        if(one.getIsAdjust() == 0){
-            throw new BusinessException(ErrorCode.PARAMS_ERROR,"当前时间未处于调整阶段！");
+        if (one.getIsAdjust() == 0) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "当前时间未处于调整阶段！");
         }
         Long id = argueScoreRequest.getId();
         Double score = argueScoreRequest.getScore();
@@ -350,8 +472,8 @@ public class HrServiceImpl implements HrService {
         if (one == null) {
             throw new BusinessException(ErrorCode.OPERATION_ERROR, "本月尚未发布考评！");
         }
-        if(one.getIsPublic() == 1){
-            throw new BusinessException(ErrorCode.OPERATION_ERROR,"当前正处于公示期！");
+        if (one.getIsPublic() == 1) {
+            throw new BusinessException(ErrorCode.OPERATION_ERROR, "当前正处于公示期！");
         }
         one.setIsPublic(1);
         // 存储确认结果表
@@ -396,8 +518,8 @@ public class HrServiceImpl implements HrService {
         if (one == null) {
             throw new BusinessException(ErrorCode.OPERATION_ERROR, "本月尚未发布考评！");
         }
-        if(one.getIsPublic() == 0){
-            throw new BusinessException(ErrorCode.PARAMS_ERROR,"还未开启公示或公示已结束");
+        if (one.getIsPublic() == 0) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "还未开启公示或公示已结束");
         }
         one.setIsPublic(0);
 
@@ -468,7 +590,7 @@ public class HrServiceImpl implements HrService {
         if (one == null) {
             return false;
         }
-        if(one.getIsPublic() == 1){
+        if (one.getIsPublic() == 1) {
             return false;
         }
         one.setIsPublic(1);
@@ -507,6 +629,7 @@ public class HrServiceImpl implements HrService {
 
     /**
      * 自动结束公示
+     *
      * @return
      */
     @Override
@@ -518,13 +641,18 @@ public class HrServiceImpl implements HrService {
         if (one == null) {
             return false;
         }
-        if(one.getIsPublic() == 0){
+        if (one.getIsPublic() == 0) {
             return false;
         }
         one.setIsPublic(0);
         return publicityService.updateById(one);
     }
 
+    /**
+     * 冻结，流程结束
+     *
+     * @return
+     */
     @Override
     public boolean AutoFreezen() {
         String date = getCurrentDateAsDate();
@@ -538,6 +666,11 @@ public class HrServiceImpl implements HrService {
         return publicityService.updateById(one);
     }
 
+    /**
+     * 调整阶段
+     *
+     * @return
+     */
     @Override
     public boolean adjust() {
         String date = getCurrentDateAsDate();
@@ -551,6 +684,11 @@ public class HrServiceImpl implements HrService {
         return publicityService.updateById(one);
     }
 
+    /**
+     * 调整结束
+     *
+     * @return
+     */
     @Override
     public boolean overAdjust() {
         String date = getCurrentDateAsDate();
@@ -562,5 +700,22 @@ public class HrServiceImpl implements HrService {
         }
         one.setIsAdjust(0);
         return publicityService.updateById(one);
+    }
+
+    @Override
+    public Map<String, String> getDisList() {
+        String date = getCurrentDateAsDate();
+        QueryWrapper<Confirm> wrapper = new QueryWrapper<>();
+        wrapper.eq("assessment_time", date);
+        wrapper.eq("isDispute", 1);
+        Map<String, String> res = new HashMap<>();
+        List<Confirm> list = confirmService.list(wrapper);
+        if (list.size() == 0) {
+            return res;
+        }
+        for (Confirm confirm : list) {
+            res.put(confirm.getUnit(), confirm.getName());
+        }
+        return res;
     }
 }

@@ -23,11 +23,13 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import javax.annotation.Resource;
+import javax.servlet.ServletOutputStream;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.List;
+import java.util.Map;
 
 import static com.telecom.project.utils.DateUtil.getCurrentDateAsDate;
 
@@ -107,7 +109,7 @@ public class HrController {
      */
     @RequestMapping("export/excel")
     @AuthCheck(mustRole = "hr")
-    public BaseResponse<String> exportExcel(HttpServletResponse response) throws IOException {
+    public void exportExcel(HttpServletResponse response) throws IOException {
 
         String date = getCurrentDateAsDate();
         QueryWrapper<Publicity> pubWrapper = new QueryWrapper<>();
@@ -116,15 +118,21 @@ public class HrController {
         if (one == null || one.getIsFreeze() == 0) {
             throw new BusinessException(ErrorCode.OPERATION_ERROR, "当前评分表尚未结束流程，请于本月23日18:30后导出结果！");
         }
+
         // 设置文件响应头
         response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
         response.setHeader("Content-Disposition", "attachment; filename=contracts.xlsx");
 
         // 获取数据并写入 Excel
-        ByteArrayOutputStream outputStream = ExcelUtil.exportUsersToExcel(hrService.getAllContracts());
-        response.getOutputStream().write(outputStream.toByteArray());
-        return ResultUtils.success("导出成功");
+        try (ByteArrayOutputStream outputStream = ExcelUtil.exportUsersToExcel(hrService.getAllContracts());
+             ServletOutputStream responseStream = response.getOutputStream()) {
+            responseStream.write(outputStream.toByteArray());
+            responseStream.flush();
+        } catch (IOException e) {
+            throw new BusinessException(ErrorCode.OPERATION_ERROR, "导出失败，请重试！");
+        }
     }
+
 
 
     /**
@@ -227,6 +235,30 @@ public class HrController {
         boolean res = hrService.freeze();
         return ResultUtils.success(res);
     }
+
+    /**
+     * 争议名单
+     * @return
+     */
+    @RequestMapping("/get/dispute/list")
+    @AuthCheck(mustRole = "hr")
+    public BaseResponse<Map<String,String>> getDisputeList() {
+        Map<String,String> res =  hrService.getDisList();
+        return ResultUtils.success(res);
+    }
+
+    /**
+     * 获得总分
+     * @return
+     */
+    @RequestMapping("/get/all/score")
+    @AuthCheck(mustRole = "hr")
+    public BaseResponse<Map<String,String>> getAllScore() {
+        Map<String,String> res =  hrService.getDisList();
+        return ResultUtils.success(res);
+    }
+
+
 
 
 }

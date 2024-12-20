@@ -9,6 +9,7 @@ import com.telecom.project.model.vo.ExcelVO;
 
 import javax.servlet.http.HttpServletRequest;
 import java.util.List;
+import java.util.Map;
 
 /**
  * @author: Toys
@@ -46,4 +47,6 @@ public interface HrService {
     boolean adjust();
 
     boolean overAdjust();
+
+    Map<String, String> getDisList();
 }

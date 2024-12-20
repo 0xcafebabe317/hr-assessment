@@ -1,21 +1,37 @@
 package com.telecom.project.utils;
 
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.telecom.project.model.entity.ContractsScore;
 import com.telecom.project.model.entity.PerformanceContracts;
 import com.telecom.project.model.vo.ExcelVO;
+import com.telecom.project.service.PerformanceContractsService;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.ss.util.CellRangeAddress;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationContext;
+import org.springframework.stereotype.Component;
 
+
+import javax.annotation.Resource;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.util.Comparator;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
+import java.util.*;
 import java.util.stream.Collectors;
 
+
+@Component
 public class ExcelUtil {
+
+    private static ApplicationContext context;
+
+    // 通过 @Autowired 注入 ApplicationContext
+    @Autowired
+    public void setApplicationContext(ApplicationContext applicationContext) {
+        context = applicationContext;  // 将 ApplicationContext 注入到静态变量
+    }
+
+
     public static void safeMerge(Sheet sheet, int startRow, int endRow, int col, CellStyle style) {
         if (startRow != endRow) {  // 确保开始行和结束行不同，才进行合并
             sheet.addMergedRegion(new CellRangeAddress(startRow, endRow, col, col));
@@ -35,12 +51,15 @@ public class ExcelUtil {
 
     /**
      * 人力获取的公示结果
+     *
      * @param excelData
      * @return
      * @throws IOException
      */
     public static ByteArrayOutputStream exportUsersToExcel(List<ExcelVO> excelData) throws IOException {
         Workbook workbook = new XSSFWorkbook();
+        PerformanceContractsService performanceContractsService = context.getBean(PerformanceContractsService.class);
+
 
         // 根据 assessed_unit 进行分组
         Map<String, List<ExcelVO>> groupedData = excelData.stream()
@@ -87,11 +106,26 @@ public class ExcelUtil {
         // 为每个 assessed_unit 创建一个 sheet
         for (Map.Entry<String, List<ExcelVO>> entry : groupedData.entrySet()) {
             String sheetName = entry.getKey();
+
+            QueryWrapper<PerformanceContracts> wrapper = new QueryWrapper<>();
+            wrapper.eq("assessed_unit", sheetName);
+            List<PerformanceContracts> list = performanceContractsService.list(wrapper);
+            // 提取去重后的 assessed_people 字段集合
+            List<String> uniqueAssessedPeople = list.stream()
+                    .map(PerformanceContracts::getAssessed_people)  // 提取 assessed_people 字段
+                    .distinct()  // 去重
+                    .collect(Collectors.toList());  // 收集到 List 中
+
+            Map<String, Double> res = new HashMap<>();
+            for (String name : uniqueAssessedPeople) {
+                double scoreByName = performanceContractsService.getScoreByName(name);
+                res.put(name, scoreByName);
+            }
+
             List<ExcelVO> unitData = entry.getValue();
 
             // 创建新表单
             Sheet sheet = workbook.createSheet(sheetName);
-            sheet.protectSheet("xzlzdx.telecom");  // 设置密码保护，防止修改
 
             // 填充表头
             Row headerRow = sheet.createRow(0);
@@ -159,7 +193,7 @@ public class ExcelUtil {
                             value = data.getAssessment_dept();
                             break;
                         case 4:
-                            value = data.getWeight() != null ? String.valueOf(data.getWeight()) : "0";
+                            value = data.getWeight() != null ? String.valueOf(data.getWeight()) : "";
                             break;
                         case 5:
                             value = data.getScoring_method(); // 记分方法
@@ -211,6 +245,47 @@ public class ExcelUtil {
             if (subCategoryRowStart >= 0 && subCategoryRowStart < unitData.size()) {
                 safeMerge(sheet, subCategoryRowStart, unitData.size(), 1, headerBorderStyle); // 使用安全的合并方法
             }
+
+            // 空两行
+            int lastRowNum = sheet.getLastRowNum();
+            for (int i = 0; i < 2; i++) {
+                sheet.createRow(lastRowNum + 1 + i); // 创建空行
+            }
+
+// 输出得分表
+            Row scoreHeaderRow = sheet.createRow(lastRowNum + 3); // 表头行
+            scoreHeaderRow.createCell(0).setCellValue("姓名");
+            scoreHeaderRow.createCell(1).setCellValue("得分");
+            scoreHeaderRow.setHeightInPoints(20); // 设置行高
+
+// 创建样式用于得分表的表头和内容
+            CellStyle scoreCellStyle = workbook.createCellStyle();
+            scoreCellStyle.setAlignment(HorizontalAlignment.CENTER); // 水平居中
+            scoreCellStyle.setVerticalAlignment(VerticalAlignment.CENTER); // 垂直居中
+            scoreCellStyle.setBorderTop(BorderStyle.THIN);
+            scoreCellStyle.setBorderRight(BorderStyle.THIN);
+            scoreCellStyle.setBorderBottom(BorderStyle.THIN);
+            scoreCellStyle.setBorderLeft(BorderStyle.THIN);
+
+// 应用样式到表头
+            scoreHeaderRow.getCell(0).setCellStyle(scoreCellStyle);
+            scoreHeaderRow.getCell(1).setCellStyle(scoreCellStyle);
+
+            int rowIndex = lastRowNum + 4; // 从空两行后的下一行开始
+            for (Map.Entry<String, Double> map : res.entrySet()) {
+                Row row = sheet.createRow(rowIndex++);
+                Cell cell0 = row.createCell(0);
+                Cell cell1 = row.createCell(1);
+
+                cell0.setCellValue(map.getKey()); // 姓名
+                cell1.setCellValue(map.getValue()); // 得分
+
+                // 应用相同的样式到每一行的单元格
+                cell0.setCellStyle(scoreCellStyle);
+                cell1.setCellStyle(scoreCellStyle);
+            }
+
+
         }
 
         // 将数据写入输出流
@@ -223,6 +298,7 @@ public class ExcelUtil {
 
     /**
      * 打分模板
+     *
      * @param excelData
      * @return
      * @throws IOException
@@ -237,7 +313,7 @@ public class ExcelUtil {
         // 表头
         String[] headers = {
                 "大类名称", "小类名称", "指标", "考核部门", "权重", "记分方法", "考核周期",
-                "被考核单位", "被考核中心", "被考核人", "其他", "得分", "考核时间", "评分人"
+                "被考核单位", "被考核中心", "被考核人", "其他", "得分", "考核时间"
         };
 
         // 创建样式用于换行+边框
@@ -292,7 +368,7 @@ public class ExcelUtil {
             headerRow.setHeightInPoints(20); // 设置行高为20个点
 
             // 设置表头列宽
-            int[] columnWidths = {22, 22, 25, 15, 8, 30, 10, 15, 15, 12, 10, 10, 15, 13}; // 示例宽度
+            int[] columnWidths = {22, 22, 25, 15, 8, 30, 10, 15, 15, 12, 10, 10, 15}; // 示例宽度
             for (int i = 0; i < headers.length; i++) {
                 sheet.setColumnWidth(i, columnWidths[i] * 256); // 设置列宽
             }
@@ -346,7 +422,7 @@ public class ExcelUtil {
                             value = data.getAssessment_dept();
                             break;
                         case 4:
-                            value = data.getWeight() != null ? String.valueOf(data.getWeight()) : "0";
+                            value = data.getWeight() != null ? String.valueOf(data.getWeight()) : "";
                             break;
                         case 5:
                             value = data.getScoring_method(); // 记分方法
@@ -368,13 +444,10 @@ public class ExcelUtil {
                             value = data.getOther();
                             break;
                         case 11:
-                            value = data.getScore() != null ? String.valueOf(data.getScore()) : "0.0";
+                            value = data.getScore() != null ? String.valueOf(data.getScore()) : "";
                             break;
                         case 12:
                             value = data.getAssessment_time();
-                            break;
-                        case 13:
-                            value = data.getAssessment_people();
                             break;
                     }
                     cell.setCellValue(value);
@@ -443,7 +516,7 @@ public class ExcelUtil {
                     excelVO.setOther(contract.getOther());
 
                     // 从 ContractsScore 中设置分数、考核时间和评分人
-                    excelVO.setScore(0.0);
+                    excelVO.setScore(score.getScore());
                     excelVO.setAssessment_time(score.getAssessment_time());
                     excelVO.setAssessment_people(score.getAssessment_people());
 

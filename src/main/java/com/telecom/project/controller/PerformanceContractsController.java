@@ -117,13 +117,14 @@ public class PerformanceContractsController {
     /**
      * 获取打分页面
      *
-     * @param pageRequest
+     * @param userScoreRequest
      * @param request
      * @return
      */
     @RequestMapping("get/contracts/score")
-    public BaseResponse<Page<PerformanceContracts>> getContractsScore(@RequestBody PageRequest pageRequest, HttpServletRequest request) {
-        Page<PerformanceContracts> res = performanceContractsService.getContractsScore(pageRequest, request);
+    @AuthCheck(anyRole = {"score", "hr"})
+    public BaseResponse<Page<PerformanceContracts>> getContractsScore(@RequestBody UserScoreRequest userScoreRequest, HttpServletRequest request) {
+        Page<PerformanceContracts> res = performanceContractsService.getContractsScore(userScoreRequest, request);
         return ResultUtils.success(res);
     }
 
@@ -134,7 +135,7 @@ public class PerformanceContractsController {
      * @throws IOException
      */
     @RequestMapping("dld/excel")
-    @AuthCheck(mustRole = "score")
+    @AuthCheck(anyRole = {"score", "hr"})
     public void dldExcel(HttpServletResponse response, HttpServletRequest request) throws IOException {
         // 设置文件响应头
         response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
@@ -152,7 +153,7 @@ public class PerformanceContractsController {
      * @return
      */
     @RequestMapping("/saveBatch")
-    @AuthCheck(mustRole = "score")
+    @AuthCheck(anyRole = {"score", "hr"})
     public BaseResponse<Boolean> saveBatchRes(@RequestParam("file") MultipartFile multipartFile) throws IOException {
         // 判断文件是否为空
         if (multipartFile.isEmpty()) {
@@ -218,6 +219,8 @@ public class PerformanceContractsController {
      * @return
      */
     @RequestMapping("/delete/contract")
+    @AuthCheck(mustRole = "hr")
+
     public BaseResponse<Boolean> DeleteContract(@RequestBody IdRequest idRequest) {
         if (idRequest == null) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "参数为空");
@@ -287,5 +290,11 @@ public class PerformanceContractsController {
         return ResultUtils.success(b);
     }
 
+
+    @RequestMapping("/get/total/score")
+    public BaseResponse<Double> getTotalScore(HttpServletRequest request) {
+        double res = performanceContractsService.getTotal(request);
+        return ResultUtils.success(res);
+    }
 
 }

@@ -34,7 +34,7 @@ public interface PerformanceContractsService extends IService<PerformanceContrac
 
     List<PerformanceContracts> getContracts(ContractsRequest contractsRequest);
 
-    Page<PerformanceContracts> getContractsScore(PageRequest pageRequest,HttpServletRequest request);
+    Page<PerformanceContracts> getContractsScore(UserScoreRequest userScoreRequest,HttpServletRequest request);
 
     boolean score(ScoreRequest scoreRequest,HttpServletRequest request);
 
@@ -59,4 +59,8 @@ public interface PerformanceContractsService extends IService<PerformanceContrac
     List<ExcelVO> getAllContracts(HttpServletRequest request);
 
     boolean saveRes(MultipartFile multipartFile) throws IOException;
+
+    double getTotal(HttpServletRequest request);
+
+    double getScoreByName(String name);
 }
