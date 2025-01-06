@@ -24,7 +24,7 @@ public interface HrService {
 
     List<String> getUnscoreDepts();
 
-    List<ExcelVO> getAllContracts();
+    List<ExcelVO> getAllContracts(String yearmonth);
 
     Page<PerformanceContracts> getContractsScore(ScorePageRequest scorepageRequest, HttpServletRequest request);
 

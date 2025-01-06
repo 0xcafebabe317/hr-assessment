@@ -254,26 +254,18 @@ public class HrServiceImpl implements HrService {
                 .collect(Collectors.groupingBy(PerformanceContracts::getAssessment_dept, Collectors.counting()));
 
         Set<String> depts = assessmentDeptCount.keySet();
-        //       String deptsStr = String.join("、", depts);
-
-//        //给人力发送邮件
-//        // 标题
-//        String hrSubject = date + "业绩合同未提交评分名单";
-//        // 内容
-//        String hrContent = "以下部门还未进行评分提交：【"+deptsStr+"】，已向对应打分负责人发送邮箱提醒。";
-//        // 人力
-//        QueryWrapper<User> hrWrapper = new QueryWrapper<>();
-//        hrWrapper.eq("userRole","hr");
-//        List<User> hrList = userService.list(hrWrapper);
-//        List<String> hrEmails = hrList.stream().map(User::getEmail).collect(Collectors.toList());
-//        for (String email : hrEmails) {
-//            mailService.sendSimpleMail(email, hrSubject, hrContent);
-//        }
         // 发邮箱给打分部门
         QueryWrapper<User> scoreDeptWrapper = new QueryWrapper<>();
         String scoreSubject = date + "业绩合同评分提醒";
         // 内容
-        String scoreContent = "请尽快前往业绩合同评分系统进行评分提交，逾期将锁定评分表，评分地址：118.25.230.183";
+        String scoreContent = "根据《关于印发中国电信林芝分公司绩效管理办法（2024版）的通知》（中国电信林芝【2024】101号）规定，请各部门负责人于12月25日13：00前完成11月单位、部门业绩打分，并邮件至人力资源部，逾期造成业绩考核未完成的部门将进行通报，扣除相关部门负责人业绩得分，感谢配合。\n" +
+                "\n" +
+                "本月打分线上线下并行\n" +
+                "地址：http://118.25.230.183\n" +
+                "账号：手机号（可申请）\n" +
+                "初始密码：12345678\n" +
+                "登录后请在右上角选择修改密码\n" +
+                "如果有操作上的问题，联系 唐玮志：13308941203";
         // 打分部门
         scoreDeptWrapper.eq("userRole", "score");
         scoreDeptWrapper.in("userDept", depts);
@@ -318,13 +310,11 @@ public class HrServiceImpl implements HrService {
     }
 
     @Override
-    public List<ExcelVO> getAllContracts() {
-        // 本月时间
-        String date = getCurrentDateAsDate();
+    public List<ExcelVO> getAllContracts(String yearmonth) {
 
         // 查询当月的合同评分记录
         QueryWrapper<ContractsScore> wrapper = new QueryWrapper<>();
-        wrapper.eq("assessment_time", date);
+        wrapper.eq("assessment_time", yearmonth);
         List<ContractsScore> list = contractsScoreService.list(wrapper);
 
         if (CollectionUtils.isEmpty(list)) {
@@ -336,7 +326,7 @@ public class HrServiceImpl implements HrService {
 
         // 已锁定条数
         QueryWrapper<ContractsScore> wrapper1 = new QueryWrapper<>();
-        wrapper1.eq("assessment_time", date);
+        wrapper1.eq("assessment_time", yearmonth);
         // wrapper1.eq("is_lock", 1);
         long lockCount = contractsScoreService.count(wrapper1);
 

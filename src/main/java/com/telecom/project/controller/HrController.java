@@ -10,6 +10,7 @@ import com.telecom.project.exception.BusinessException;
 import com.telecom.project.model.dto.contracts.AnnouncementRequest;
 import com.telecom.project.model.dto.hr.ArgueScoreRequest;
 import com.telecom.project.model.dto.hr.ScorePageRequest;
+import com.telecom.project.model.dto.hr.YearMonthRequest;
 import com.telecom.project.model.entity.Announcement;
 import com.telecom.project.model.entity.PerformanceContracts;
 import com.telecom.project.model.entity.Publicity;
@@ -20,6 +21,7 @@ import com.telecom.project.utils.ExcelUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import javax.annotation.Resource;
@@ -109,22 +111,32 @@ public class HrController {
      */
     @RequestMapping("export/excel")
     @AuthCheck(mustRole = "hr")
-    public void exportExcel(HttpServletResponse response) throws IOException {
+    public void exportExcel(
+            @RequestBody YearMonthRequest yearMonth, // 接收 "2024年1月" 这样的字符串
+            HttpServletResponse response
+    ) throws IOException {
 
-        String date = getCurrentDateAsDate();
+        String yearmonth = yearMonth.getYearmonth();
+        // 检查参数格式是否正确
+        if (!yearmonth.matches("\\d{4}年\\d{1,2}月")) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "参数格式不正确，应为 'YYYY年M月'！");
+        }
+        // 查询条件：根据年份和月份筛选
         QueryWrapper<Publicity> pubWrapper = new QueryWrapper<>();
-        pubWrapper.eq("assessment_time", date);
+        pubWrapper.eq("assessment_time", yearmonth);
         Publicity one = publicityService.getOne(pubWrapper);
+
+        // 检查流程是否已冻结
         if (one == null || one.getIsFreeze() == 0) {
-            throw new BusinessException(ErrorCode.OPERATION_ERROR, "当前评分表尚未结束流程，请于本月23日18:30后导出结果！");
+            throw new BusinessException(ErrorCode.OPERATION_ERROR, "当前评分流程尚未开始或尚未结束，请于本月23日18:30后导出结果！");
         }
 
         // 设置文件响应头
         response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-        response.setHeader("Content-Disposition", "attachment; filename=contracts.xlsx");
+        response.setHeader("Content-Disposition", "attachment; filename=result_" + yearMonth + ".xlsx");
 
         // 获取数据并写入 Excel
-        try (ByteArrayOutputStream outputStream = ExcelUtil.exportUsersToExcel(hrService.getAllContracts());
+        try (ByteArrayOutputStream outputStream = ExcelUtil.exportUsersToExcel(hrService.getAllContracts(yearmonth));
              ServletOutputStream responseStream = response.getOutputStream()) {
             responseStream.write(outputStream.toByteArray());
             responseStream.flush();
