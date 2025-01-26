@@ -116,118 +116,6 @@ public class HrServiceImpl implements HrService {
     @Override
     public boolean lock() {
         String currentDate = getCurrentDateAsDate();
-        // 计算各县局局长的评分并且补充到其他三个中心的评分里面
-        QueryWrapper<PerformanceContracts> wrapper = new QueryWrapper<>();
-        wrapper.eq("assessed_center", "CEO");
-        List<PerformanceContracts> ceos = performanceContractsService.list(wrapper);
-        // <巴宜区,[1，2，,3，,4]>  哪一个区的所有id
-        // 创建一个 Map 用于存储分组结果
-        Map<String, List<Long>> map = ceos.stream()
-                .collect(Collectors.groupingBy(
-                        PerformanceContracts::getAssessed_unit, // 根据 assessed_unit 字段分组
-                        Collectors.mapping(PerformanceContracts::getId, Collectors.toList()) // 提取 id 并收集为 List
-                ));
-
-        // CEO总分 <巴宜区,88.8>
-        Map<String, Double> ceoScore = new HashMap<>();
-        for (Map.Entry<String, List<Long>> entry : map.entrySet()) {
-            // 对应区县的名称和 CEO的考核细则
-            String assessedUnit = entry.getKey(); // 获取 assessed_unit
-            List<Long> ids = entry.getValue();   // 获取对应的 id 列表
-            QueryWrapper<ContractsScore> wrapper1 = new QueryWrapper<>();
-            wrapper1.in("contract_id", ids);
-            List<ContractsScore> list = contractsScoreService.list(wrapper1);
-            double totalScore = list.stream()
-                    .mapToDouble(ContractsScore::getScore) // 映射为 double
-                    .sum(); // 求和
-            ceoScore.put(assessedUnit, totalScore);
-        }
-        // 政企、公众 30%  综维 20%
-        // 政企
-        QueryWrapper<PerformanceContracts> wrapper3 = new QueryWrapper<>();
-        wrapper3.eq("assessed_center", "政企中心");
-        wrapper3.eq("indicators", "县（支）局业绩得分");
-        List<PerformanceContracts> list = performanceContractsService.list(wrapper3);
-        // <巴宜区,2>
-        Map<Long, String> map1 = list.stream()
-                .collect(Collectors.toMap(
-                        PerformanceContracts::getId,           // 以 id 作为键
-                        PerformanceContracts::getAssessed_unit, // 以 assessed_unit 作为值
-                        (existing, replacement) -> replacement // 如果有重复键，保留最新的值
-                ));
-
-        QueryWrapper<ContractsScore> wrapper1 = new QueryWrapper<>();
-        Set<Long> ids = map1.keySet();
-        wrapper1.in("contract_id", ids);
-        List<ContractsScore> list1 = contractsScoreService.list(wrapper1);
-        for (ContractsScore item : list1) {
-            Long contractId = item.getContract_id();
-            String unit = map1.get(contractId);
-            // 从ceoScore找到ceo的分
-            Double aDouble = ceoScore.get(unit);
-            // 政企30%
-            double resScore = Math.round(aDouble * 0.3 * 100) / 100.0; // 保留两位小数
-            item.setScore(resScore);
-            contractsScoreService.updateById(item);
-        }
-
-        // 公众
-        QueryWrapper<PerformanceContracts> wrapper4 = new QueryWrapper<>();
-        wrapper4.eq("assessed_center", "公众商客");
-        wrapper4.eq("indicators", "县（支）局业绩得分");
-        List<PerformanceContracts> list2 = performanceContractsService.list(wrapper4);
-        // <2，巴宜区>
-        Map<Long, String> map2 = list2.stream()
-                .collect(Collectors.toMap(
-                        PerformanceContracts::getId,           // 以 id 作为键
-                        PerformanceContracts::getAssessed_unit, // 以 assessed_unit 作为值
-                        (existing, replacement) -> replacement // 如果有重复键，保留最新的值
-                ));
-
-        QueryWrapper<ContractsScore> wrapper5 = new QueryWrapper<>();
-        Set<Long> ids1 = map2.keySet();
-        wrapper5.in("contract_id", ids1);
-        List<ContractsScore> list3 = contractsScoreService.list(wrapper5);
-        for (ContractsScore item : list3) {
-            Long contractId = item.getContract_id();
-            String unit = map2.get(contractId);
-            // 从ceoScore找到ceo的分
-            Double aDouble = ceoScore.get(unit);
-            // 公众30%
-            double resScore = Math.round(aDouble * 0.3 * 100) / 100.0; // 保留两位小数
-            item.setScore(resScore);
-            contractsScoreService.updateById(item);
-        }
-
-        // 综维
-        QueryWrapper<PerformanceContracts> wrapper6 = new QueryWrapper<>();
-        wrapper6.eq("assessed_center", "综维中心");
-        wrapper6.eq("indicators", "县（支）局业绩得分");
-        List<PerformanceContracts> list4 = performanceContractsService.list(wrapper6);
-        // <2,巴宜区>
-        Map<Long, String> map3 = list4.stream()
-                .collect(Collectors.toMap(
-                        PerformanceContracts::getId,           // 以 id 作为键
-                        PerformanceContracts::getAssessed_unit, // 以 assessed_unit 作为值
-                        (existing, replacement) -> replacement // 如果有重复键，保留最新的值
-                ));
-
-        QueryWrapper<ContractsScore> wrapper7 = new QueryWrapper<>();
-        Set<Long> ids3 = map3.keySet();
-        wrapper7.in("contract_id", ids3);
-        List<ContractsScore> list5 = contractsScoreService.list(wrapper7);
-        for (ContractsScore item : list5) {
-            Long contractId = item.getContract_id();
-            String unit = map3.get(contractId);
-            // 从ceoScore找到ceo的分
-            Double aDouble = ceoScore.get(unit);
-            // 综维20%
-            double resScore = Math.round(aDouble * 0.2 * 100) / 100.0; // 保留两位小数
-            item.setScore(resScore);
-            contractsScoreService.updateById(item);
-        }
-
-
         return contractsScoreMapper.lockRes(currentDate);
     }
 
@@ -311,6 +199,121 @@ public class HrServiceImpl implements HrService {
 
     @Override
     public List<ExcelVO> getAllContracts(String yearmonth) {
+
+        // 计算各县局局长的评分并且补充到其他三个中心的评分里面
+        QueryWrapper<PerformanceContracts> wrapperpc = new QueryWrapper<>();
+        wrapperpc.eq("assessed_center", "CEO");
+        List<PerformanceContracts> ceos = performanceContractsService.list(wrapperpc);
+        // <巴宜区,[1，2，,3，,4]>  哪一个区的所有id
+        // 创建一个 Map 用于存储分组结果
+        Map<String, List<Long>> map = ceos.stream()
+                .collect(Collectors.groupingBy(
+                        PerformanceContracts::getAssessed_unit, // 根据 assessed_unit 字段分组
+                        Collectors.mapping(PerformanceContracts::getId, Collectors.toList()) // 提取 id 并收集为 List
+                ));
+
+        // CEO总分 <巴宜区,88.8>
+        Map<String, Double> ceoScore = new HashMap<>();
+        for (Map.Entry<String, List<Long>> entry : map.entrySet()) {
+            // 对应区县的名称和 CEO的考核细则
+            String assessedUnit = entry.getKey(); // 获取 assessed_unit
+            List<Long> ids = entry.getValue();   // 获取对应的 id 列表
+            QueryWrapper<ContractsScore> wrappercs = new QueryWrapper<>();
+            wrappercs.in("contract_id", ids);
+            wrappercs.eq("assessment_time",yearmonth);
+            List<ContractsScore> list = contractsScoreService.list(wrappercs);
+            double totalScore = list.stream()
+                    .mapToDouble(ContractsScore::getScore) // 映射为 double
+                    .sum(); // 求和
+            ceoScore.put(assessedUnit, totalScore);
+        }
+        // 政企、公众 30%  综维 20%
+        // 政企
+        QueryWrapper<PerformanceContracts> wrapper3 = new QueryWrapper<>();
+        wrapper3.eq("assessed_center", "政企中心");
+        wrapper3.eq("indicators", "县（支）局业绩得分");
+        List<PerformanceContracts> listPC = performanceContractsService.list(wrapper3);
+        // <巴宜区,2>
+        Map<Long, String> map1 = listPC.stream()
+                .collect(Collectors.toMap(
+                        PerformanceContracts::getId,           // 以 id 作为键
+                        PerformanceContracts::getAssessed_unit, // 以 assessed_unit 作为值
+                        (existing, replacement) -> replacement // 如果有重复键，保留最新的值
+                ));
+
+        QueryWrapper<ContractsScore> wrapperCS = new QueryWrapper<>();
+        Set<Long> idsT = map1.keySet();
+        wrapperCS.in("contract_id", idsT);
+        wrapperCS.eq("assessment_time",yearmonth);
+        List<ContractsScore> listCS = contractsScoreService.list(wrapperCS);
+        for (ContractsScore item : listCS) {
+            Long contractId = item.getContract_id();
+            String unit = map1.get(contractId);
+            // 从ceoScore找到ceo的分
+            Double aDouble = ceoScore.get(unit);
+            // 政企30%
+            double resScore = Math.round(aDouble * 0.3 * 100) / 100.0; // 保留两位小数
+            item.setScore(resScore);
+            contractsScoreService.updateById(item);
+        }
+
+        // 公众
+        QueryWrapper<PerformanceContracts> wrapper4 = new QueryWrapper<>();
+        wrapper4.eq("assessed_center", "公众商客");
+        wrapper4.eq("indicators", "县（支）局业绩得分");
+        List<PerformanceContracts> list2 = performanceContractsService.list(wrapper4);
+        // <2，巴宜区>
+        Map<Long, String> map2 = list2.stream()
+                .collect(Collectors.toMap(
+                        PerformanceContracts::getId,           // 以 id 作为键
+                        PerformanceContracts::getAssessed_unit, // 以 assessed_unit 作为值
+                        (existing, replacement) -> replacement // 如果有重复键，保留最新的值
+                ));
+
+        QueryWrapper<ContractsScore> wrapper5 = new QueryWrapper<>();
+        Set<Long> ids1 = map2.keySet();
+        wrapper5.in("contract_id", ids1);
+        wrapper5.eq("assessment_time",yearmonth);
+        List<ContractsScore> list3 = contractsScoreService.list(wrapper5);
+        for (ContractsScore item : list3) {
+            Long contractId = item.getContract_id();
+            String unit = map2.get(contractId);
+            // 从ceoScore找到ceo的分
+            Double aDouble = ceoScore.get(unit);
+            // 公众30%
+            double resScore = Math.round(aDouble * 0.3 * 100) / 100.0; // 保留两位小数
+            item.setScore(resScore);
+            contractsScoreService.updateById(item);
+        }
+
+        // 综维
+        QueryWrapper<PerformanceContracts> wrapper6 = new QueryWrapper<>();
+        wrapper6.eq("assessed_center", "综维中心");
+        wrapper6.eq("indicators", "县（支）局业绩得分");
+        List<PerformanceContracts> list4 = performanceContractsService.list(wrapper6);
+        // <2,巴宜区>
+        Map<Long, String> map3 = list4.stream()
+                .collect(Collectors.toMap(
+                        PerformanceContracts::getId,           // 以 id 作为键
+                        PerformanceContracts::getAssessed_unit, // 以 assessed_unit 作为值
+                        (existing, replacement) -> replacement // 如果有重复键，保留最新的值
+                ));
+
+        QueryWrapper<ContractsScore> wrapper7 = new QueryWrapper<>();
+        Set<Long> ids3 = map3.keySet();
+        wrapper7.in("contract_id", ids3);
+        wrapper7.eq("assessment_time",yearmonth);
+        List<ContractsScore> list5 = contractsScoreService.list(wrapper7);
+        for (ContractsScore item : list5) {
+            Long contractId = item.getContract_id();
+            String unit = map3.get(contractId);
+            // 从ceoScore找到ceo的分
+            Double aDouble = ceoScore.get(unit);
+            // 综维20%
+            double resScore = Math.round(aDouble * 0.2 * 100) / 100.0; // 保留两位小数
+            item.setScore(resScore);
+            contractsScoreService.updateById(item);
+        }
 
         // 查询当月的合同评分记录
         QueryWrapper<ContractsScore> wrapper = new QueryWrapper<>();

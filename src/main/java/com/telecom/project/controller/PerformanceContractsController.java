@@ -290,7 +290,11 @@ public class PerformanceContractsController {
         return ResultUtils.success(b);
     }
 
-
+    /**
+     * 获取总分
+     * @param request
+     * @return
+     */
     @RequestMapping("/get/total/score")
     public BaseResponse<Double> getTotalScore(HttpServletRequest request) {
         double res = performanceContractsService.getTotal(request);

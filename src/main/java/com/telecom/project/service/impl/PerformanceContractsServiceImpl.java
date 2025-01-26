@@ -1,6 +1,5 @@
 package com.telecom.project.service.impl;
 
-import com.baomidou.mybatisplus.core.conditions.query.Query;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
@@ -9,8 +8,8 @@ import com.telecom.project.common.IdRequest;
 import com.telecom.project.common.PageRequest;
 import com.telecom.project.exception.BusinessException;
 import com.telecom.project.model.dto.contracts.*;
+import com.telecom.project.model.dto.hr.YearMonthRequest;
 import com.telecom.project.model.entity.*;
-import com.telecom.project.model.vo.ContractsVO;
 import com.telecom.project.model.vo.ExcelVO;
 import com.telecom.project.service.*;
 import com.telecom.project.mapper.PerformanceContractsMapper;
@@ -82,18 +81,23 @@ public class PerformanceContractsServiceImpl extends ServiceImpl<PerformanceCont
     @Override
     public boolean addContracts(PerformanceContracts performanceContracts) {
         PerformanceContracts pc = new PerformanceContracts();
+
         // 大类
-        String categories = performanceContracts.getCategories();
+        String categories = performanceContracts.getCategories() != null ? performanceContracts.getCategories().trim() : null;
         pc.setCategories(categories);
+
         // 小类
-        String sub_categories = performanceContracts.getSub_categories();
+        String sub_categories = performanceContracts.getSub_categories() != null ? performanceContracts.getSub_categories().trim() : null;
         pc.setSub_categories(sub_categories);
+
         // 指标
-        String indicators = performanceContracts.getIndicators();
+        String indicators = performanceContracts.getIndicators() != null ? performanceContracts.getIndicators().trim() : null;
         pc.setIndicators(indicators);
+
         // 考核部门
-        String assessment_dept = performanceContracts.getAssessment_dept();
+        String assessment_dept = performanceContracts.getAssessment_dept() != null ? performanceContracts.getAssessment_dept().trim() : null;
         pc.setAssessment_dept(assessment_dept);
+
         // 权重
         Integer weight = performanceContracts.getWeight();
         if (weight != null) {
@@ -104,34 +108,41 @@ public class PerformanceContractsServiceImpl extends ServiceImpl<PerformanceCont
         }
 
         // 记分方法
-        String scoring_method = performanceContracts.getScoring_method();
+        String scoring_method = performanceContracts.getScoring_method() != null ? performanceContracts.getScoring_method().trim() : null;
         pc.setScoring_method(scoring_method);
+
         // 考核周期
-        String assessment_cycle = performanceContracts.getAssessment_cycle();
+        String assessment_cycle = performanceContracts.getAssessment_cycle() != null ? performanceContracts.getAssessment_cycle().trim() : null;
         pc.setAssessment_cycle(assessment_cycle);
+
         // 被考核单位
-        String assessed_unit = performanceContracts.getAssessed_unit();
+        String assessed_unit = performanceContracts.getAssessed_unit() != null ? performanceContracts.getAssessed_unit().trim() : null;
         pc.setAssessed_unit(assessed_unit);
+
         // 被考核中心
-        String assessed_center = performanceContracts.getAssessed_center();
+        String assessed_center = performanceContracts.getAssessed_center() != null ? performanceContracts.getAssessed_center().trim() : null;
         pc.setAssessed_center(assessed_center);
+
         // 被考核人
-        String assessed_people = performanceContracts.getAssessed_people();
+        String assessed_people = performanceContracts.getAssessed_people() != null ? performanceContracts.getAssessed_people().trim() : null;
         pc.setAssessed_people(assessed_people);
+
         // 其他
-        String other = performanceContracts.getOther();
+        String other = performanceContracts.getOther() != null ? performanceContracts.getOther().trim() : null;
         pc.setOther(other);
+
         QueryWrapper<PerformanceContracts> wrapper = new QueryWrapper<>();
         wrapper.eq("assessment_dept", assessment_dept)
                 .eq("scoring_method", scoring_method)
                 .eq("assessed_people", assessed_people);
+
         List<PerformanceContracts> list = this.list(wrapper);
         if (list.size() > 0) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "该条数据已经存在！");
         }
+
         return this.save(pc);
     }
-
     @Override
     public List<String> getAssessedCenter() {
         List<Center> list = centerService.list();
@@ -617,12 +628,14 @@ public class PerformanceContractsServiceImpl extends ServiceImpl<PerformanceCont
     @Override
     public double getTotal(HttpServletRequest request) {
         User loginUser = userService.getLoginUser(request);
+        String date = getCurrentDateAsDate();
         QueryWrapper<PerformanceContracts> wrapper = new QueryWrapper<>();
         wrapper.eq("assessed_people", loginUser.getUserName());
         List<PerformanceContracts> list = this.list(wrapper);
         List<Long> ids = list.stream().map(item -> item.getId()).collect(Collectors.toList());
         QueryWrapper<ContractsScore> wrapper1 = new QueryWrapper<>();
         wrapper1.in("contract_id", ids);
+        wrapper1.eq("assessment_time",date);
         List<ContractsScore> list1 = contractsScoreService.list(wrapper1);
         double totalScore = list1.stream()
                 .map(item -> item.getScore()) // 获取每个 item 的 score
@@ -634,15 +647,17 @@ public class PerformanceContractsServiceImpl extends ServiceImpl<PerformanceCont
      * 根据名字获取总分
      *
      * @param name
+     * @param yearMonth
      * @return
      */
-    public double getScoreByName(String name) {
+    public double getScoreByName(String name, YearMonthRequest yearMonth) {
         QueryWrapper<PerformanceContracts> wrapper = new QueryWrapper<>();
         wrapper.eq("assessed_people", name);
         List<PerformanceContracts> list = this.list(wrapper);
         List<Long> ids = list.stream().map(item -> item.getId()).collect(Collectors.toList());
         QueryWrapper<ContractsScore> wrapper1 = new QueryWrapper<>();
         wrapper1.in("contract_id", ids);
+        wrapper1.eq("assessment_time",yearMonth.getYearmonth());
         List<ContractsScore> list1 = contractsScoreService.list(wrapper1);
         double totalScore = list1.stream()
                 .map(item -> item.getScore()) // 获取每个 item 的 score

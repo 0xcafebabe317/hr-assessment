@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.telecom.project.common.IdRequest;
 import com.telecom.project.common.PageRequest;
 import com.telecom.project.model.dto.contracts.*;
+import com.telecom.project.model.dto.hr.YearMonthRequest;
 import com.telecom.project.model.entity.PerformanceContracts;
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.telecom.project.model.vo.ContractsVO;
@@ -62,5 +63,5 @@ public interface PerformanceContractsService extends IService<PerformanceContrac
 
     double getTotal(HttpServletRequest request);
 
-    double getScoreByName(String name);
+    double getScoreByName(String name, YearMonthRequest yearMonth);
 }

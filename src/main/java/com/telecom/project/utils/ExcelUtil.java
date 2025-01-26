@@ -1,6 +1,7 @@
 package com.telecom.project.utils;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.telecom.project.model.dto.hr.YearMonthRequest;
 import com.telecom.project.model.entity.ContractsScore;
 import com.telecom.project.model.entity.PerformanceContracts;
 import com.telecom.project.model.vo.ExcelVO;
@@ -56,7 +57,7 @@ public class ExcelUtil {
      * @return
      * @throws IOException
      */
-    public static ByteArrayOutputStream exportUsersToExcel(List<ExcelVO> excelData) throws IOException {
+    public static ByteArrayOutputStream exportUsersToExcel(List<ExcelVO> excelData, YearMonthRequest yearmonth) throws IOException {
         Workbook workbook = new XSSFWorkbook();
         PerformanceContractsService performanceContractsService = context.getBean(PerformanceContractsService.class);
 
@@ -118,7 +119,7 @@ public class ExcelUtil {
 
             Map<String, Double> res = new HashMap<>();
             for (String name : uniqueAssessedPeople) {
-                double scoreByName = performanceContractsService.getScoreByName(name);
+                double scoreByName = performanceContractsService.getScoreByName(name,yearmonth);
                 res.put(name, scoreByName);
             }
 
@@ -254,7 +255,7 @@ public class ExcelUtil {
 
 // 输出得分表
             Row scoreHeaderRow = sheet.createRow(lastRowNum + 3); // 表头行
-            scoreHeaderRow.createCell(0).setCellValue("姓名");
+            scoreHeaderRow.createCell(0).setCellValue("被考核人姓名");
             scoreHeaderRow.createCell(1).setCellValue("得分");
             scoreHeaderRow.setHeightInPoints(20); // 设置行高
 

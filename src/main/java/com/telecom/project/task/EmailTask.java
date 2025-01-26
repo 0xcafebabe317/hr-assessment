@@ -9,7 +9,6 @@ import com.telecom.project.service.HrService;
 import com.telecom.project.service.UserService;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 import javax.annotation.Resource;
@@ -38,7 +37,7 @@ public class EmailTask {
     /**
      * 如果未评分每天提醒，每天早上9：30执行
      */
-    @Scheduled(cron = "0 30 9 * * ?")
+   // @Scheduled(cron = "0 30 9 * * ?")
     public void remindScore() {
         List<String> unscoreDeptsForEmail = hrService.getUnscoreDeptsForEmail();
         // 如果所有部门都已经打分，则不执行
@@ -76,7 +75,7 @@ public class EmailTask {
     /**
      * 每月15日上午9：30开始发布评分表
      */
-    @Scheduled(cron = "0 30 9 15 * ?")
+  //  @Scheduled(cron = "0 30 9 15 * ?")
     public void pubScoreTable() {
         boolean lock = hrService.publish();
         String date = getCurrentDateAsDate();
@@ -88,7 +87,7 @@ public class EmailTask {
     /**
      * 每月18日下午18：30锁定评分表
      */
-    @Scheduled(cron = "0 30 18 18 * ?")
+  //  @Scheduled(cron = "0 30 18 18 * ?")
     public void lockScore() {
         boolean lock = hrService.lock();
         String date = getCurrentDateAsDate();
@@ -100,7 +99,7 @@ public class EmailTask {
     /**
      * 每月16日早上9：30开始公示
      */
-    @Scheduled(cron = "0 30 9 19 * ?")
+  //  @Scheduled(cron = "0 30 9 19 * ?")
     public void publicRes() {
         String date = getCurrentDateAsDate();
         boolean b = hrService.AutoPublicRes();
@@ -112,7 +111,7 @@ public class EmailTask {
     /**
      * 每月18日下午18：30结束公示
      */
-    @Scheduled(cron = "0 30 18 21 * ?")
+ //   @Scheduled(cron = "0 30 18 21 * ?")
     public void OverPubRes() {
         String date = getCurrentDateAsDate();
         boolean b = hrService.AutoUnPublicRes();
@@ -124,7 +123,7 @@ public class EmailTask {
     /**
      * 每月22日9:30-23日18:30调整
      */
-    @Scheduled(cron = "0 30 9 22 * ?")
+  //  @Scheduled(cron = "0 30 9 22 * ?")
     public void adjust() {
         String date = getCurrentDateAsDate();
         boolean b = hrService.adjust();
@@ -136,7 +135,7 @@ public class EmailTask {
     /**
      * 每月22日9:30-23日18:30调整
      */
-    @Scheduled(cron = "0 30 18 23 * ?")
+  //  @Scheduled(cron = "0 30 18 23 * ?")
     public void overAdjust() {
         String date = getCurrentDateAsDate();
         boolean b = hrService.overAdjust();
@@ -149,7 +148,7 @@ public class EmailTask {
     /**
      * 每月23日18：:30冻结，冻结后人力不可修改评分
      */
-    @Scheduled(cron = "0 30 18 23 * ?")
+  //  @Scheduled(cron = "0 30 18 23 * ?")
     public void freeze() {
         String date = getCurrentDateAsDate();
         boolean b = hrService.AutoFreezen();

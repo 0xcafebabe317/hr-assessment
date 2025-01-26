@@ -112,7 +112,7 @@ public class HrController {
     @RequestMapping("export/excel")
     @AuthCheck(mustRole = "hr")
     public void exportExcel(
-            @RequestBody YearMonthRequest yearMonth, // 接收 "2024年1月" 这样的字符串
+            @RequestBody YearMonthRequest yearMonth,
             HttpServletResponse response
     ) throws IOException {
 
@@ -136,7 +136,7 @@ public class HrController {
         response.setHeader("Content-Disposition", "attachment; filename=result_" + yearMonth + ".xlsx");
 
         // 获取数据并写入 Excel
-        try (ByteArrayOutputStream outputStream = ExcelUtil.exportUsersToExcel(hrService.getAllContracts(yearmonth));
+        try (ByteArrayOutputStream outputStream = ExcelUtil.exportUsersToExcel(hrService.getAllContracts(yearmonth),yearMonth);
              ServletOutputStream responseStream = response.getOutputStream()) {
             responseStream.write(outputStream.toByteArray());
             responseStream.flush();
