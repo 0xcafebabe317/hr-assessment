@@ -1,4 +1,4 @@
-package com.telecom.project.task;
+package com.telecom.project.task.email;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.telecom.project.common.ErrorCode;
